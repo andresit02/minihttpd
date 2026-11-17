@@ -1,53 +1,72 @@
 # MiniHTTPd
 
-Servidor HTTP/1.1 estático para Linux escrito en C (`-std=c11`) desde cero, sin bibliotecas HTTP externas. Implementa concurrencia de un solo hilo con `epoll`, sockets no bloqueantes, conexiones persistentes, validación estricta de solicitudes, tipos MIME y mitigación de vulnerabilidades.
+## 1. Descripción del proyecto
 
-## Estructura
+**MiniHTTPd** es un servidor HTTP/1.1 de contenido estático para Linux desarrollado en C, sin bibliotecas HTTP externas. Implementa concurrencia de un solo hilo basada en eventos (`epoll`), sockets TCP no bloqueantes, conexiones persistentes, resolución segura de archivos, tipos MIME y mitigación de vulnerabilidades comunes.
+
+---
+
+## 2. Requisitos implementados (Checklist de cumplimiento)
+
+| Requisito solicitado | Implementación | Ubicación en el código | Estado |
+| :--- | :--- | :--- | :---: |
+| Servidor HTTP sin bibliotecas externas | Sockets POSIX, parser y formateador HTTP propios | `src/passivesock.c`, `src/http.c` | ✅ |
+| Concurrencia con `epoll` (1 hilo) | Bucle de eventos con `epoll_create1`, `epoll_ctl`, `epoll_wait` y `O_NONBLOCK` | `src/server.c` (`server_run`, `set_nonblocking`) | ✅ |
+| Conexiones persistentes | `keep-alive` por defecto en HTTP/1.1, cola de peticiones y cierre con `Connection: close` | `src/http.c` (`http_parse_request`), `src/server.c` (`process_pending_requests`) | ✅ |
+| Exclusividad de protocolo `HTTP/1.1` | Rechaza `HTTP/1.0`, `HTTP/2.0` u otras versiones con `505` | `src/http.c` (`http_parse_request`) | ✅ |
+| Solo método `GET` | Rechaza cualquier otro método (`POST`, `PUT`, `HEAD`, etc.) con `405` y `Allow: GET` | `src/server.c` (`prepare_response`) | ✅ |
+| Cabeceras obligatorias HTTP/1.1 | Exige `Host`, `Connection` y `User-Agent` presentes y no vacías (`400` si faltan) | `src/server.c` (`prepare_response`), `src/http.c` (`http_get_header`) | ✅ |
+| Tipos MIME | `.html`, `.css`, `.js`, `.png`, `.jpg` y extensiones adicionales | `src/mime.c` (`mime_type_for_path`) | ✅ |
+| Códigos de estado requeridos | `200`, `400`, `403`, `404`, `405`, `500` (además `503` y `505`) | `src/http.c` (`http_reason_phrase`, `http_format_error`), `src/files.c` (`map_errno`) | ✅ |
+| Control de tamaño de solicitudes | Límite de buffer (`8192` B) y URI (`4096` B) respondiendo `400 Bad Request` | `include/config.h`, `include/http.h`, `src/http.c`, `src/server.c` | ✅ |
+| Estructura del repositorio | `Makefile`, `README`, `include/`, `src/`, `www/` | Raíz de `MiniHTTPd/` | ✅ |
+
+---
+
+## 3. Arquitectura del proyecto
 
 ```text
 MiniHTTPd/
-├── Makefile                  # Compilación
-├── README.md
+├── Makefile                  # Compilación 
+├── README.md                 # Documentaciòn
 ├── include/
-│   ├── config.h              # Puertos, límites y timeouts
-│   ├── files.h               # Acceso seguro al sistema de archivos
-│   ├── http.h                # Parser HTTP y formateo de respuestas
-│   ├── mime.h                # Resolución de tipos MIME
-│   └── server.h              # Bucle de eventos epoll
+│   ├── config.h              # Puerto por defecto, raíz web, límites y timeouts
+│   ├── files.h               # Estados de archivo y prototipo de apertura segura
+│   ├── http.h                # Estructura http_request_t, parser y formateo HTTP
+│   ├── mime.h                # Prototipo de resolución de tipos MIME
+│   └── server.h              # Prototipo del bucle principal con epoll
 ├── src/
-│   ├── main.c                # Entrada y validación de raíz web
-│   ├── server.c              # epoll, O_NONBLOCK, EPOLLOUT y persistencia
-│   ├── http.c                # Parser estricto (request-line y cabeceras)
-│   ├── files.c               # realpath(), prevención de traversal y lectura
-│   ├── mime.c                # Tabla de tipos MIME
-│   ├── passiveTCP.c          # Adaptador TCP
-│   └── passivesock.c         # Socket pasivo con getaddrinfo()
+│   ├── main.c                # Validación de argumentos, realpath() de raíz y arranque
+│   ├── server.c              # Bucle epoll, E/S no bloqueante, keep-alive y timeouts
+│   ├── http.c                # Parsing de solicitud HTTP/1.1 y generación de respuestas
+│   ├── files.c               # Decodificación URI, realpath() y apertura de archivos
+│   ├── mime.c                # Mapeo de extensiones a Content-Type
+│   ├── passivesock.c         # Creación y bind de socket TCP con getaddrinfo()
+│   └── passiveTCP.c          # Adaptador TCP hacia passivesock()
 └── www/
-    ├── index.html
-    ├── style.css
-    ├── app.js
-    └── image.png
+    ├── index.html            
+    ├── style.css            
+    ├── app.js               
+    └── image.png            
 ```
 
-## Compilación y ejecución
+## 4. Responsabilidad de los módulos principales
+
+- **`src/main.c`**: valida argumentos de línea de comandos, resuelve la ruta canónica de `www/` con `realpath()`, verifica que sea directorio, abre el socket TCP con `passiveTCP()` e invoca `server_run()`.
+- **`src/server.c`**: administra hasta `MINIHTTPD_MAX_CLIENTS` (`128`) conexiones simultáneas en un solo hilo mediante `epoll`, maneja escrituras parciales con `EPOLLOUT`, aplica timeout de inactividad (`15 s`), procesa peticiones persistentes en cola y valida las reglas HTTP/1.1 (`GET` y 3 cabeceras obligatorias).
+- **`src/http.c`**: valida sintaxis de línea de solicitud y cabeceras (`http_parse_request`), consulta cabeceras sin distinguir mayúsculas (`http_get_header`) y construye cabeceras y páginas HTML de error (`http_format_headers`, `http_format_error`).
+- **`src/files.c`**: limpia query strings, decodifica `%XX` rechazando caracteres de control (`<= 0x1F`, `0x7F`), bloquea segmentos `..`, resuelve la ruta final con `realpath()` y verifica con `inside_root()` que no escape de `www/`.
+- **`src/mime.c`**: determina el `Content-Type` según la extensión del archivo (sin distinguir mayúsculas) con respaldo `application/octet-stream`.
+
+---
+
+## 5. Ejecución
 
 ```bash
 make
 ./minihttpd 8080 www
 ```
-
 Sin argumentos utiliza por defecto el puerto `8080` y el directorio `www` (`./minihttpd`).  
 Reglas disponibles: `make` (compilar), `make clean` (limpiar binarios y objetos) y `make re` (recompilar).
 
-## Características implementadas
-
-- **Concurrencia (`epoll`, 1 proceso / 1 hilo):** sin `fork` ni `pthread`. Usa `epoll_create1`, `epoll_ctl` y `epoll_wait` con sockets `O_NONBLOCK`, escritura asíncrona mediante `EPOLLOUT` para archivos grandes o clientes lentos, y cierre por inactividad a los `15 s`.
-- **Protocolo y persistencia:**
-  - Solo acepta `GET`; cualquier otro método devuelve `405 Method Not Allowed` (`Allow: GET`), evaluado antes de exigir cabeceras opcionales.
-  - En `HTTP/1.1` exige `Host`, `Connection` y `User-Agent` presentes y no vacíos (`400 Bad Request` si falta alguno) y mantiene la conexión abierta salvo `Connection: close`.
-  - En `HTTP/1.0` no exige esas cabeceras y cierra la conexión al responder. Las respuestas usan línea de estado `HTTP/1.1` (RFC 9112/2145).
-- **Sistema de archivos y MIME:** sirve recursos estáticos desde `www/` (`index.html` por defecto en `/` y subdirectorios, sin listado de carpetas). Soporta `.html`/`.htm` (`text/html`), `.css` (`text/css`), `.js` (`application/javascript`), `.png` (`image/png`), `.jpg`/`.jpeg` (`image/jpeg`), además de `.json`, `.txt`, `.xml`, `.gif`, `.svg`, `.ico`, `.pdf` y `application/octet-stream`.
-- **Seguridad:**
-  - *Directory Traversal:* bloqueo mediante validación de ruta, decodificación `%XX` segura (`%00` y control rechazados) y `realpath()` dentro de `www/` (`403 Forbidden`, incluidos enlaces simbólicos).
-  - *Buffer Overflows:* sin `strcpy` ni `sprintf`; parser manual estricto que rechaza sintaxis inválida o tamaños excesivos (`HTTP_TARGET_MAX = 4096`, `MINIHTTPD_REQUEST_MAX = 8192`) con `400 Bad Request`.
-- **Códigos de estado:** `200 OK`, `400 Bad Request`, `403 Forbidden`, `404 Not Found`, `405 Method Not Allowed`, `500 Internal Server Error`, `503 Service Unavailable` y `505 HTTP Version Not Supported`.
+---

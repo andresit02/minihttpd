@@ -9,17 +9,20 @@
 #include <string.h>
 #include <unistd.h>
 
+// Verifica que la ruta resuelta permanezca dentro del directorio raíz
 static int inside_root(const char *root, const char *path) {
     size_t length = strlen(root);
     return strncmp(root, path, length) == 0 && (path[length] == '\0' || path[length] == '/');
 }
 
+// Traduce errores del sistema de archivos a códigos de estado HTTP
 static file_status_t map_errno(int err) {
     if (err == EACCES || err == EPERM) return FILE_FORBIDDEN;
     if (err == ENOENT || err == ENOTDIR || err == ELOOP || err == ENAMETOOLONG) return FILE_NOT_FOUND;
     return FILE_INTERNAL;
 }
 
+// Decodifica secuencias %XX en la URI y rechaza caracteres de control
 static int decode_url(char *path) {
     char *source = path, *destination = path;
     while (*source) {
@@ -38,6 +41,7 @@ static int decode_url(char *path) {
     *destination = '\0'; return 0;
 }
 
+// Comprueba que la URI inicie en '/' y no contenga segmentos '..'
 static int safe_uri(const char *uri) {
     if (!uri || uri[0] != '/') return 0;
     const char *part = uri + 1;
@@ -50,6 +54,7 @@ static int safe_uri(const char *uri) {
     return 1;
 }
 
+// Abre de forma segura un archivo estático: limpia query, decodifica URI, valida con realpath y resuelve directorios a index.html
 file_status_t file_open_safe(const char *root, const char *uri, int *fd,
                              struct stat *info, char *resolved_path, size_t path_size) {
     if (!root || !uri || !fd || !info || !resolved_path) return FILE_INTERNAL;

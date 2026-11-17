@@ -16,6 +16,7 @@
 #include <time.h>
 #include <unistd.h>
 
+// Estado de cada conexión activa manejada por epoll
 typedef struct {
     int fd;
     char buffer[MINIHTTPD_REQUEST_MAX];
@@ -30,6 +31,7 @@ typedef struct {
     int file_fd;
 } client_t;
 
+// Configura un descriptor en modo no bloqueante para epoll
 static int set_nonblocking(int fd) {
     int flags = fcntl(fd, F_GETFL, 0);
     if (flags < 0) return -1;
@@ -44,6 +46,7 @@ static int set_epoll_events(int epfd, int fd, uint32_t events) {
     return epoll_ctl(epfd, EPOLL_CTL_MOD, fd, &ev);
 }
 
+// Cierra el socket del cliente, su archivo abierto (si hay) y limpia el slot
 static void close_client(int epfd, client_t *client) {
     if (client->file_fd >= 0) {
         close(client->file_fd);
@@ -100,6 +103,7 @@ static void queue_error_response(client_t *client, int status, const char *detai
     client->close_after_send = !keep_alive;
 }
 
+// Prepara la respuesta en out_buf: valida GET, cabeceras HTTP/1.1 obligatorias y abre el archivo
 static void prepare_response(client_t *client, const char *root, char *raw) {
     http_request_t request;
     int parse = http_parse_request(raw, strlen(raw), &request);
@@ -161,7 +165,8 @@ static void prepare_response(client_t *client, const char *root, char *raw) {
     client->close_after_send = !request.keep_alive;
 }
 
-/* Retorna: 1 = terminó envío, 0 = pendiente (EAGAIN), -1 = error de socket */
+// Envía cabeceras y bloques del archivo de forma no bloqueante
+// Retorna: 1 = terminó envío, 0 = pendiente (EAGAIN), -1 = error de socket
 static int flush_client_write(client_t *client, time_t now) {
     while (client->sending) {
         if (client->out_sent < client->out_len) {
@@ -200,6 +205,7 @@ static int flush_client_write(client_t *client, time_t now) {
     return 1;
 }
 
+// Extrae y atiende peticiones completas (\r\n\r\n) acumuladas en el buffer del cliente
 static void process_pending_requests(int epfd, client_t *client, const char *root, time_t now) {
     char *end;
     while (client->fd >= 0 && !client->sending &&
@@ -238,6 +244,7 @@ static void process_pending_requests(int epfd, client_t *client, const char *roo
     }
 }
 
+// Bucle principal event-driven con epoll: acepta conexiones, controla timeouts y despacha E/S
 void server_run(int listen_fd, const char *root) {
     signal(SIGPIPE, SIG_IGN);
 

@@ -7,6 +7,7 @@
 #include <unistd.h>
 #include "config.h"
 
+// Crea, enlaza y pone en escucha un socket TCP pasivo usando getaddrinfo (IPv4/IPv6)
 int passivesock(const char *service, const char *transport, int backlog) {
     (void)transport;
     struct addrinfo hints, *result, *entry;
@@ -17,7 +18,7 @@ int passivesock(const char *service, const char *transport, int backlog) {
     for (entry = result; entry; entry = entry->ai_next) {
         server = socket(entry->ai_family, entry->ai_socktype, entry->ai_protocol);
         if (server < 0) continue;
-        int yes = 1; setsockopt(server, SOL_SOCKET, SO_REUSEADDR, &yes, sizeof(yes));
+        int yes = 1; setsockopt(server, SOL_SOCKET, SO_REUSEADDR, &yes, sizeof(yes)); // Permite reutilizar el puerto rápido
         if (bind(server, entry->ai_addr, entry->ai_addrlen) == 0 && listen(server, backlog) == 0) break;
         close(server); server = -1;
     }

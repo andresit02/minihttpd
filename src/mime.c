@@ -2,6 +2,7 @@
 #include <string.h>
 #include <strings.h>
 
+// Tabla de extensiones soportadas y su Content-Type correspondiente
 typedef struct { const char *extension; const char *type; } mime_entry_t;
 static const mime_entry_t entries[] = {
     {".html", "text/html"}, {".htm", "text/html"},
@@ -13,6 +14,7 @@ static const mime_entry_t entries[] = {
     {NULL, NULL}
 };
 
+// Busca la extensión al final de la ruta (sin distinguir mayúsculas) o devuelve binario genérico
 const char *mime_type_for_path(const char *path) {
     const char *extension = path ? strrchr(path, '.') : NULL;
     if (!extension) return "application/octet-stream";

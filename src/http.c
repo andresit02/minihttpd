@@ -9,6 +9,7 @@
 #include <sys/socket.h>
 #include <time.h>
 
+// Garantiza el envío completo del buffer aunque send() escriba parcialmente
 int http_send_all(int fd, const void *data, size_t length) {
     const char *cursor = data;
     while (length > 0) {
@@ -21,6 +22,7 @@ int http_send_all(int fd, const void *data, size_t length) {
     return 0;
 }
 
+// Frase estándar asociada a cada código de estado HTTP
 const char *http_reason_phrase(int status) {
     switch (status) {
         case 200: return "OK"; case 400: return "Bad Request";
@@ -34,6 +36,7 @@ const char *http_reason_phrase(int status) {
     }
 }
 
+// Verifica que no haya espacios ni caracteres de control en tokens de la solicitud
 static int is_valid_token_chars(const char *start, size_t len) {
     if (len == 0) return 0;
     for (size_t i = 0; i < len; i++) {
@@ -43,6 +46,7 @@ static int is_valid_token_chars(const char *start, size_t len) {
     return 1;
 }
 
+// Valida el formato "HTTP/<dígito>.<dígito>"
 static int is_http_version_syntax(const char *version, size_t len) {
     if (len < 8 || strncmp(version, "HTTP/", 5) != 0) return 0;
     const char *dot = memchr(version + 5, '.', len - 5);
@@ -54,6 +58,7 @@ static int is_http_version_syntax(const char *version, size_t len) {
     return 1;
 }
 
+// Parsea la línea de solicitud y valida la sintaxis de todas las cabeceras
 int http_parse_request(const char *raw, size_t length, http_request_t *request) {
     if (!raw || !request || length == 0) return 400;
 
@@ -108,7 +113,7 @@ int http_parse_request(const char *raw, size_t length, http_request_t *request) 
         return 505;
     }
 
-    /* Validar sintaxis de todas las líneas de cabecera hasta la línea vacía */
+    // Validar sintaxis de todas las líneas de cabecera hasta la línea vacía
     const char *cursor = line_end + 2;
     const char *raw_end = raw + length;
     int found_empty_line = 0;
@@ -144,6 +149,7 @@ int http_parse_request(const char *raw, size_t length, http_request_t *request) 
     return 0;
 }
 
+// Busca una cabecera por nombre (case-insensitive) y copia su valor sin espacios extremos
 int http_get_header(const char *raw, const char *name, char *value, size_t value_size) {
     if (!raw || !name) return 0;
     const char *line = strstr(raw, "\r\n");
@@ -182,6 +188,7 @@ int http_has_header(const char *raw, const char *name) {
     return http_get_header(raw, name, NULL, 0);
 }
 
+// Arma las cabeceras de respuesta HTTP/1.1 con fecha GMT, longitud y política de conexión
 int http_format_headers(char *out, size_t out_size, int status,
                         const char *type, off_t length,
                         int keep_alive, const char *extra) {
@@ -200,6 +207,7 @@ int http_format_headers(char *out, size_t out_size, int status,
     return n;
 }
 
+// Genera una respuesta HTML completa para códigos de error (4xx/5xx)
 int http_format_error(char *out, size_t out_size, int status,
                       const char *detail, int keep_alive, const char *extra) {
     char body[1200];

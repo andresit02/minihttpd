@@ -128,13 +128,11 @@ static void prepare_response(client_t *client, const char *root, char *raw) {
         return;
     }
 
-    if (strcmp(request.version, "HTTP/1.1") == 0) {
-        if (!http_has_header(raw, "Host") ||
-            !has_conn ||
-            !http_has_header(raw, "User-Agent")) {
-            queue_error_response(client, 400, "HTTP/1.1 requiere Host, Connection y User-Agent.", 0, NULL);
-            return;
-        }
+    if (!http_has_header(raw, "Host") ||
+        !has_conn ||
+        !http_has_header(raw, "User-Agent")) {
+        queue_error_response(client, 400, "HTTP/1.1 requiere Host, Connection y User-Agent.", 0, NULL);
+        return;
     }
 
     int file_fd;
@@ -373,6 +371,7 @@ void server_run(int listen_fd, const char *root) {
 
             if (!(ev_flags & EPOLLIN) || client->sending) continue;
 
+            int peer_closed = 0;
             for (;;) {
                 if (client->used >= sizeof(client->buffer) - 1) break;
                 ssize_t received = recv(client->fd,
@@ -387,6 +386,10 @@ void server_run(int listen_fd, const char *root) {
                 }
                 if (received < 0 && errno == EINTR) continue;
                 if (received < 0 && (errno == EAGAIN || errno == EWOULDBLOCK)) break;
+                if (received == 0) {
+                    peer_closed = 1;
+                    break;
+                }
                 close_client(epfd, client);
                 break;
             }
@@ -407,6 +410,9 @@ void server_run(int listen_fd, const char *root) {
             }
 
             process_pending_requests(epfd, client, root, now);
+            if (peer_closed && client->fd >= 0 && !client->sending) {
+                close_client(epfd, client);
+            }
         }
     }
 

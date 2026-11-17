@@ -108,8 +108,7 @@ int http_parse_request(const char *raw, size_t length, http_request_t *request) 
 
     if (request->target[0] != '/') return 400;
     if (!is_http_version_syntax(request->version, version_len)) return 400;
-    if (strcmp(request->version, "HTTP/1.0") != 0 &&
-        strcmp(request->version, "HTTP/1.1") != 0) {
+    if (strcmp(request->version, "HTTP/1.1") != 0) {
         return 505;
     }
 
@@ -145,7 +144,7 @@ int http_parse_request(const char *raw, size_t length, http_request_t *request) 
     }
     if (!found_empty_line) return 400;
 
-    request->keep_alive = strcmp(request->version, "HTTP/1.1") == 0;
+    request->keep_alive = 1;
     return 0;
 }
 

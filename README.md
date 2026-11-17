@@ -6,7 +6,7 @@ Servidor HTTP/1.1 estático para Linux escrito en C (`-std=c11`) desde cero, sin
 
 ```text
 MiniHTTPd/
-├── Makefile                  # Compilación incremental (-MMD -MP)
+├── Makefile                  # Compilación
 ├── README.md
 ├── include/
 │   ├── config.h              # Puertos, límites y timeouts

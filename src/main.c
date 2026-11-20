@@ -207,7 +207,7 @@ int main(int argc, char **argv) {
     // Abre el socket en escucha y arranca el bucle con epoll
     int server = server_create_listen_socket(port, MINIHTTPD_BACKLOG);
     if (server < 0) return EXIT_FAILURE;
-    printf("MiniHTTPd concurrente con epoll en puerto %s\nRaíz web: %s\n", port, resolved_root);
+    printf("Servidor MiniHTTPd escuchando en puerto %s\n", port);
     fflush(stdout);
     run_event_loop(server, resolved_root);
     close(server);

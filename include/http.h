@@ -8,7 +8,7 @@
 #define HTTP_TARGET_MAX 4096
 #define HTTP_VERSION_MAX 16
 #define HTTP_REQUEST_MAX 8192
-#define MINIHTTPD_SERVER_NAME "MiniHTTPd/2.0"
+#define MINIHTTPD_SERVER_NAME "MiniHTTPd"
 
 // Datos extraídos de la línea de solicitud HTTP
 typedef struct {

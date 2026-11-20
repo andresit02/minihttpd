@@ -67,3 +67,31 @@ Sin argumentos utiliza por defecto el puerto `8080` y el directorio `www` (`./mi
 Reglas disponibles: `make` (compilar), `make clean` (limpiar binarios y objetos) y `make re` (recompilar).
 
 ---
+
+## 6. Pruebas
+
+### En navegador
+- Abrir `http://localhost:8080/` para verificar la carga de `index.html`, `style.css`, `app.js` e `image.png` (`200 OK`, tipos MIME y `keep-alive`).
+- Abrir `http://localhost:8080/noexiste.html` para comprobar la respuesta `404 Not Found`.
+
+### En consola
+```bash
+# Recursos válidos (200 OK) y tipos MIME
+curl -i -H "Connection: close" http://127.0.0.1:8080/
+curl -s -D - -o /dev/null -H "Connection: close" http://127.0.0.1:8080/style.css
+
+# Recurso inexistente (404) y método distinto a GET (405)
+curl -i -H "Connection: close" http://127.0.0.1:8080/noexiste.html
+curl -i -X POST -H "Connection: close" http://127.0.0.1:8080/
+
+# Path traversal (403) y solicitud sin cabeceras obligatorias (400)
+curl -i --path-as-is -H "Connection: close" http://127.0.0.1:8080/../Makefile
+curl -i http://127.0.0.1:8080/
+
+# Versión distinta a HTTP/1.1 (505)
+printf "GET / HTTP/1.0\r\nHost: localhost\r\nConnection: close\r\nUser-Agent: nc\r\n\r\n" | nc -w 1 127.0.0.1 8080
+
+# Conexión persistente (keep-alive) y concurrencia con epoll (100 peticiones)
+printf "GET / HTTP/1.1\r\nHost: localhost\r\nConnection: keep-alive\r\nUser-Agent: nc\r\n\r\nGET /style.css HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\nUser-Agent: nc\r\n\r\n" | nc -w 2 127.0.0.1 8080 | grep -E "HTTP/1.1|Content-Type|Connection:"
+seq 1 100 | xargs -P 50 -I {} curl -s -o /dev/null -w "%{http_code}\n" -H "Connection: close" http://127.0.0.1:8080/ | sort | uniq -c
+```

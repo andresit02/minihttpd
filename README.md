@@ -28,7 +28,7 @@
 ```text
 MiniHTTPd/
 ├── Makefile                  # Compilación 
-├── README.md                 # Documentaciòn
+├── README.md                 # Documentación
 ├── include/
 │   ├── files.h               # Estados de archivo y prototipo de apertura segura
 │   ├── http.h                # Estructura http_request_t, parser y formateo HTTP
